@@ -2,10 +2,10 @@ import asyncio
 import io
 import json
 import os
-import subprocess
 import requests
 from datetime import datetime
 import pytz
+from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputMediaPhoto
 from telegram.error import BadRequest
 from telegram.ext import (
@@ -17,14 +17,10 @@ from telegram.ext import (
     filters,
 )
 
-# আপনার আসল টেলিগ্রাম বট টোকেন বসান
+# আপনার বটের টোকেন
 BOT_TOKEN = "8689018470:AAGNk4JcbxciDqbDEM4Y3bKffQEpzvGzAGI"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_FILE = os.path.join(BASE_DIR, "template.html")
-TEMP_HTML_FILE = os.path.join(BASE_DIR, "temp_render.html")
-TEMP_IMG_FILE = os.path.join(BASE_DIR, "dashboard.png")
-
 DATA_FILE = os.path.join(BASE_DIR, "user_watchlists.json")
 STATE_FILE = os.path.join(BASE_DIR, "active_dashboards.json")
 ICONS_DIR = os.path.join(BASE_DIR, "coin_icons")
@@ -42,7 +38,31 @@ COIN_NAMES = {
     "NEAR": "NEAR Protocol", "AVAX": "Avalanche", "LINK": "Chainlink"
 }
 
-# --- ফাইল ও স্টেট ম্যানেজমেন্ট ---
+# --- ফন্ট লোডার ---
+def get_font(size=24, is_bengali=False):
+    if is_bengali:
+        kp_path = os.path.join(BASE_DIR, "Kalpurush.ttf")
+        if os.path.exists(kp_path):
+            try: return ImageFont.truetype(kp_path, size)
+            except Exception: pass
+            
+    rb_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf")
+    if os.path.exists(rb_path):
+        try: return ImageFont.truetype(rb_path, size)
+        except Exception: pass
+
+    for p in [
+        "/system/fonts/Roboto-Bold.ttf",
+        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+        "/system/fonts/DroidSans-Bold.ttf"
+    ]:
+        if os.path.exists(p):
+            try: return ImageFont.truetype(p, size)
+            except Exception: pass
+
+    return ImageFont.load_default()
+
+# --- স্টেট ও ডেটা হ্যান্ডলার ---
 def load_active_dashboards():
     if not os.path.exists(STATE_FILE): return {}
     try:
@@ -94,7 +114,7 @@ def remove_coin_for_user(user_id, symbol):
         data[uid] = coins
         save_all_data(data)
 
-# --- সেন্ট্রাল বাইনান্স ডেটা ---
+# --- সেন্ট্রাল মার্কেট ডেটা ---
 cached_market_data = {}
 
 def update_market_data():
@@ -106,10 +126,10 @@ def update_market_data():
     except Exception:
         pass
 
-# --- লোগো ক্যাশ ও ফেচার ---
-def get_coin_icon_url(symbol):
-    local_path = os.path.join(ICONS_DIR, f"{symbol.lower()}.png")
-    if not os.path.exists(local_path):
+# --- সার্কুলার লোগো ফেচার ---
+def get_coin_icon(symbol, size=92):
+    icon_path = os.path.join(ICONS_DIR, f"{symbol.lower()}.png")
+    if not os.path.exists(icon_path):
         urls = [
             f"https://assets.coincap.io/assets/icons/{symbol.lower()}@2x.png",
             f"https://cryptoicons.org/api/icon/{symbol.lower()}/200"
@@ -118,23 +138,73 @@ def get_coin_icon_url(symbol):
             try:
                 r = requests.get(u, timeout=3)
                 if r.status_code == 200 and len(r.content) > 500:
-                    with open(local_path, "wb") as f:
+                    with open(icon_path, "wb") as f:
                         f.write(r.content)
                     break
             except Exception:
                 continue
-    return local_path if os.path.exists(local_path) else ""
 
-# --- ইমেজ রেন্ডারার ---
+    if os.path.exists(icon_path):
+        try:
+            img = Image.open(icon_path).convert("RGBA")
+            img = img.resize((size, size), Image.Resampling.LANCZOS)
+            mask = Image.new("L", (size, size), 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0, size, size), fill=255)
+            circular = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            circular.paste(img, (0, 0), mask=mask)
+            return circular
+        except Exception:
+            return None
+    return None
+
+# --- পারফেক্ট রেফারেন্স ইমেজ ড্রয়িং ---
 def generate_dashboard_image(user_id):
     coins = get_user_watchlist(user_id)
-    rows_html = ""
 
+    width = 900
+    row_height = 148
+    header_pad = 32
+    footer_height = 80
+    height = header_pad + len(coins) * row_height + footer_height
+
+    # স্টিল ডার্ক ব্যাকগ্রাউন্ড (#181F29)
+    img = Image.new("RGBA", (width, height), (24, 31, 41, 255))
+    draw = ImageDraw.Draw(img)
+
+    f_symbol = get_font(38)
+    f_pair = get_font(24)
+    f_sub = get_font(24)
+    f_price = get_font(38)
+    f_bdt = get_font(26, is_bengali=True)
+    f_badge = get_font(30)
+    f_foot = get_font(20)
+
+    color_white = (255, 255, 255, 255)
+    color_grey = (132, 142, 156, 255)
+
+    y = header_pad
     for coin in coins:
-        pair = f"{coin}USDT"
-        icon_path = get_coin_icon_url(coin)
-        full_name = COIN_NAMES.get(coin, coin)
+        # ১. গোল লোগো
+        icon = get_coin_icon(coin, size=94)
+        if icon:
+            img.paste(icon, (40, y + 24), mask=icon)
+        else:
+            draw.ellipse((40, y + 24, 134, y + 118), fill=(36, 45, 59))
+            draw.text((56, y + 48), coin[:3], fill=color_white, font=f_symbol)
 
+        # ২. কয়েন সিম্বল ও /USDT
+        sym_x = 160
+        draw.text((sym_x, y + 26), coin, fill=color_white, font=f_symbol)
+        bbox = draw.textbbox((sym_x, y + 26), coin, font=f_symbol)
+        cw = bbox[2] - bbox[0]
+        draw.text((sym_x + cw + 8, y + 36), "/USDT", fill=color_grey, font=f_pair)
+
+        full_name = COIN_NAMES.get(coin, coin)
+        draw.text((sym_x, y + 78), full_name, fill=color_grey, font=f_sub)
+
+        # ৩. প্রাইস এবং টাকার রেট
+        pair = f"{coin}USDT"
         if pair in cached_market_data:
             price = float(cached_market_data[pair]["lastPrice"])
             change = float(cached_market_data[pair]["priceChangePercent"])
@@ -142,60 +212,49 @@ def generate_dashboard_image(user_id):
 
             p_str = f"{price:,.4f}" if price < 1 else f"{price:,.2f}"
             bdt_str = f"৳{bdt_price:,.2f}"
-            badge_class = "green" if change >= 0 else "red"
+
+            price_right = 625
+            p_bbox = draw.textbbox((0, 0), p_str, font=f_price)
+            pw = p_bbox[2] - p_bbox[0]
+            draw.text((price_right - pw, y + 26), p_str, fill=color_white, font=f_price)
+
+            b_bbox = draw.textbbox((0, 0), bdt_str, font=f_bdt)
+            bw = b_bbox[2] - b_bbox[0]
+            draw.text((price_right - bw, y + 78), bdt_str, fill=color_grey, font=f_bdt)
+
+            # ৪. পার্সেন্টেজ ব্যাজ (#F6465D ও #0ECB81)
+            badge_color = (246, 70, 93) if change < 0 else (14, 203, 129)
             sign = "+" if change >= 0 else ""
             c_str = f"{sign}{change:.2f}%"
+
+            bx1, by1, bx2, by2 = 665, y + 28, 860, y + 104
+            draw.rounded_rectangle([bx1, by1, bx2, by2], radius=10, fill=badge_color)
+
+            cb = draw.textbbox((0, 0), c_str, font=f_badge)
+            cw_b = cb[2] - cb[0]
+            ch_b = cb[3] - cb[1]
+            draw.text((bx1 + (195 - cw_b) // 2, by1 + (76 - ch_b) // 2 - 4), c_str, fill=color_white, font=f_badge)
         else:
-            p_str, bdt_str, badge_class, c_str = "N/A", "--", "red", "0.00%"
+            draw.text((500, y + 45), "N/A", fill=color_grey, font=f_sub)
 
-        img_tag = f'<img src="{icon_path}" class="coin-logo">' if icon_path else '<div class="coin-logo"></div>'
+        y += row_height
 
-        rows_html += f"""
-        <div class="crypto-row">
-          <div class="left-section">
-            {img_tag}
-            <div class="name-col">
-              <div class="pair-line">
-                <span class="symbol">{coin}</span>
-                <span class="quote">/USDT</span>
-              </div>
-              <span class="full-name">{full_name}</span>
-            </div>
-          </div>
-          <div class="center-section">
-            <div class="usd-price">{p_str}</div>
-            <div class="bdt-price">{bdt_str}</div>
-          </div>
-          <div class="badge {badge_class}">{c_str}</div>
-        </div>
-        """
-
+    # ৫. ফুটার
     try:
         tz = pytz.timezone("Asia/Dhaka")
         current_time = datetime.now(tz).strftime("%I:%M:%S %p")
     except Exception:
         current_time = datetime.now().strftime("%I:%M:%S")
 
-    with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
-        html_content = f.read()
+    footer_text = f"⏱ Auto Refresh: 10s   |   🕒 Last Updated: {current_time}"
+    fb = draw.textbbox((0, 0), footer_text, font=f_foot)
+    fw = fb[2] - fb[0]
+    draw.text(((width - fw) // 2, y + 22), footer_text, fill=(110, 125, 145), font=f_foot)
 
-    html_content = html_content.replace("{{ROWS}}", rows_html)
-    html_content = html_content.replace("{{LAST_UPDATED}}", current_time)
-
-    with open(TEMP_HTML_FILE, "w", encoding="utf-8") as f:
-        f.write(html_content)
-
-    subprocess.run([
-        "wkhtmltoimage",
-        "--width", "760",
-        "--quality", "95",
-        "--enable-local-file-access",
-        TEMP_HTML_FILE,
-        TEMP_IMG_FILE
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    with open(TEMP_IMG_FILE, "rb") as f:
-        return io.BytesIO(f.read())
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 def get_control_keyboard():
     return InlineKeyboardMarkup([
@@ -349,4 +408,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-      
+    
