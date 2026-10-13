@@ -17,7 +17,6 @@ from telegram.ext import (
     filters,
 )
 
-# আপনার বটের টোকেন
 BOT_TOKEN = "8689018470:AAGNk4JcbxciDqbDEM4Y3bKffQEpzvGzAGI"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,31 +37,38 @@ COIN_NAMES = {
     "NEAR": "NEAR Protocol", "AVAX": "Avalanche", "LINK": "Chainlink"
 }
 
-# --- ফন্ট লোডার ---
-def get_font(size=24, is_bengali=False):
-    if is_bengali:
-        kp_path = os.path.join(BASE_DIR, "Kalpurush.ttf")
-        if os.path.exists(kp_path):
-            try: return ImageFont.truetype(kp_path, size)
-            except Exception: pass
-            
-    rb_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf")
-    if os.path.exists(rb_path):
-        try: return ImageFont.truetype(rb_path, size)
-        except Exception: pass
-
-    for p in [
+# --- টার্মাক্স ফ্রেন্ডলি ফন্ট লোডার ---
+def get_font(size=22):
+    paths = [
+        os.path.join(BASE_DIR, "Roboto-Bold.ttf"),
         "/system/fonts/Roboto-Bold.ttf",
-        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-        "/system/fonts/DroidSans-Bold.ttf"
-    ]:
+        "/system/fonts/DroidSans-Bold.ttf",
+        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
+    ]
+    for p in paths:
         if os.path.exists(p):
-            try: return ImageFont.truetype(p, size)
-            except Exception: pass
-
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                pass
     return ImageFont.load_default()
 
-# --- স্টেট ও ডেটা হ্যান্ডলার ---
+def get_regular_font(size=16):
+    paths = [
+        os.path.join(BASE_DIR, "Roboto-Regular.ttf"),
+        "/system/fonts/Roboto-Regular.ttf",
+        "/system/fonts/DroidSans.ttf",
+        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf"
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+# --- ডেটা ও স্টেট হ্যান্ডলার ---
 def load_active_dashboards():
     if not os.path.exists(STATE_FILE): return {}
     try:
@@ -114,7 +120,7 @@ def remove_coin_for_user(user_id, symbol):
         data[uid] = coins
         save_all_data(data)
 
-# --- সেন্ট্রাল মার্কেট ডেটা ---
+# --- বাইনান্স লাইভ ডেটা ---
 cached_market_data = {}
 
 def update_market_data():
@@ -126,8 +132,8 @@ def update_market_data():
     except Exception:
         pass
 
-# --- সার্কুলার লোগো ফেচার ---
-def get_coin_icon(symbol, size=92):
+# --- ক্রিপ্টো লোগো ফেচার ---
+def get_coin_icon(symbol, size=64):
     icon_path = os.path.join(ICONS_DIR, f"{symbol.lower()}.png")
     if not os.path.exists(icon_path):
         urls = [
@@ -158,27 +164,24 @@ def get_coin_icon(symbol, size=92):
             return None
     return None
 
-# --- পারফেক্ট রেফারেন্স ইমেজ ড্রয়িং ---
+# --- রেফারেন্স ফটো ম্যাচিং ইমেজ তৈরি ---
 def generate_dashboard_image(user_id):
     coins = get_user_watchlist(user_id)
 
-    width = 900
-    row_height = 148
-    header_pad = 32
-    footer_height = 80
-    height = header_pad + len(coins) * row_height + footer_height
+    # পারফেক্ট মোবাইল অনুপাত
+    width = 650
+    row_height = 92
+    header_pad = 18
+    height = header_pad + len(coins) * row_height + 15
 
-    # স্টিল ডার্ক ব্যাকগ্রাউন্ড (#181F29)
+    # আসল স্টিল ডার্ক ব্যাকগ্রাউন্ড (#181F29)
     img = Image.new("RGBA", (width, height), (24, 31, 41, 255))
     draw = ImageDraw.Draw(img)
 
-    f_symbol = get_font(38)
-    f_pair = get_font(24)
-    f_sub = get_font(24)
-    f_price = get_font(38)
-    f_bdt = get_font(26, is_bengali=True)
-    f_badge = get_font(30)
-    f_foot = get_font(20)
+    f_bold = get_font(25)
+    f_reg = get_regular_font(16)
+    f_price = get_font(26)
+    f_badge = get_font(20)
 
     color_white = (255, 255, 255, 255)
     color_grey = (132, 142, 156, 255)
@@ -186,24 +189,23 @@ def generate_dashboard_image(user_id):
     y = header_pad
     for coin in coins:
         # ১. গোল লোগো
-        icon = get_coin_icon(coin, size=94)
+        icon = get_coin_icon(coin, size=60)
         if icon:
-            img.paste(icon, (40, y + 24), mask=icon)
+            img.paste(icon, (24, y + 14), mask=icon)
         else:
-            draw.ellipse((40, y + 24, 134, y + 118), fill=(36, 45, 59))
-            draw.text((56, y + 48), coin[:3], fill=color_white, font=f_symbol)
+            draw.ellipse((24, y + 14, 84, y + 74), fill=(36, 45, 59))
+            draw.text((36, y + 32), coin[:3], fill=color_white, font=f_bold)
 
-        # ২. কয়েন সিম্বল ও /USDT
-        sym_x = 160
-        draw.text((sym_x, y + 26), coin, fill=color_white, font=f_symbol)
-        bbox = draw.textbbox((sym_x, y + 26), coin, font=f_symbol)
+        # ২. কয়েন সিম্বল ও নাম
+        draw.text((100, y + 16), coin, fill=color_white, font=f_bold)
+        bbox = draw.textbbox((100, y + 16), coin, font=f_bold)
         cw = bbox[2] - bbox[0]
-        draw.text((sym_x + cw + 8, y + 36), "/USDT", fill=color_grey, font=f_pair)
+        draw.text((100 + cw + 6, y + 23), "/USDT", fill=color_grey, font=f_reg)
 
         full_name = COIN_NAMES.get(coin, coin)
-        draw.text((sym_x, y + 78), full_name, fill=color_grey, font=f_sub)
+        draw.text((100, y + 52), full_name, fill=color_grey, font=f_reg)
 
-        # ৩. প্রাইস এবং টাকার রেট
+        # ৩. প্রাইস এবং টাকার রেট (চারকোনা বক্স প্রতিরোধে স্পষ্ট Tk প্রিফিক্স)
         pair = f"{coin}USDT"
         if pair in cached_market_data:
             price = float(cached_market_data[pair]["lastPrice"])
@@ -211,56 +213,53 @@ def generate_dashboard_image(user_id):
             bdt_price = price * USD_TO_BDT
 
             p_str = f"{price:,.4f}" if price < 1 else f"{price:,.2f}"
-            bdt_str = f"৳{bdt_price:,.2f}"
+            bdt_str = f"Tk {bdt_price:,.2f}"
 
-            price_right = 625
+            price_right = 460
             p_bbox = draw.textbbox((0, 0), p_str, font=f_price)
             pw = p_bbox[2] - p_bbox[0]
-            draw.text((price_right - pw, y + 26), p_str, fill=color_white, font=f_price)
+            draw.text((price_right - pw, y + 16), p_str, fill=color_white, font=f_price)
 
-            b_bbox = draw.textbbox((0, 0), bdt_str, font=f_bdt)
+            b_bbox = draw.textbbox((0, 0), bdt_str, font=f_reg)
             bw = b_bbox[2] - b_bbox[0]
-            draw.text((price_right - bw, y + 78), bdt_str, fill=color_grey, font=f_bdt)
+            draw.text((price_right - bw, y + 52), bdt_str, fill=color_grey, font=f_reg)
 
             # ৪. পার্সেন্টেজ ব্যাজ (#F6465D ও #0ECB81)
             badge_color = (246, 70, 93) if change < 0 else (14, 203, 129)
             sign = "+" if change >= 0 else ""
             c_str = f"{sign}{change:.2f}%"
 
-            bx1, by1, bx2, by2 = 665, y + 28, 860, y + 104
-            draw.rounded_rectangle([bx1, by1, bx2, by2], radius=10, fill=badge_color)
+            bx1, by1, bx2, by2 = 490, y + 20, 625, y + 72
+            draw.rounded_rectangle([bx1, by1, bx2, by2], radius=8, fill=badge_color)
 
             cb = draw.textbbox((0, 0), c_str, font=f_badge)
             cw_b = cb[2] - cb[0]
             ch_b = cb[3] - cb[1]
-            draw.text((bx1 + (195 - cw_b) // 2, by1 + (76 - ch_b) // 2 - 4), c_str, fill=color_white, font=f_badge)
+            draw.text((bx1 + (135 - cw_b) // 2, by1 + (52 - ch_b) // 2 - 2), c_str, fill=color_white, font=f_badge)
         else:
-            draw.text((500, y + 45), "N/A", fill=color_grey, font=f_sub)
+            draw.text((380, y + 32), "N/A", fill=color_grey, font=f_reg)
 
         y += row_height
 
-    # ৫. ফুটার
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+    return buf
+
+# টেক্সট হিসেবে নিচের ক্যাপশন তৈরি
+def get_caption_text():
     try:
         tz = pytz.timezone("Asia/Dhaka")
         current_time = datetime.now(tz).strftime("%I:%M:%S %p")
     except Exception:
         current_time = datetime.now().strftime("%I:%M:%S")
-
-    footer_text = f"⏱ Auto Refresh: 10s   |   🕒 Last Updated: {current_time}"
-    fb = draw.textbbox((0, 0), footer_text, font=f_foot)
-    fw = fb[2] - fb[0]
-    draw.text(((width - fw) // 2, y + 22), footer_text, fill=(110, 125, 145), font=f_foot)
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    return buf
+    return f"⏱ <b>অটো রিফ্রেশ:</b> ১০ সেকেন্ড\n🕒 <b>সর্বশেষ আপডেট:</b> {current_time} (ঢাকা সময়)"
 
 def get_control_keyboard():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("➕ কয়েন যোগ", callback_data="add_coin"),
-            InlineKeyboardButton("➖ কয়েন মুছুন", callback_data="remove_coin")
+            InlineKeyboardButton("➕ কয়েন যোগ", callback_data="add_coin"),
+            InlineKeyboardButton("➖ কয়েন মুছুন", callback_data="remove_coin")
         ]
     ])
 
@@ -273,6 +272,7 @@ async def delete_after_30s(bot, chat_id, message_id):
     except Exception:
         pass
 
+# --- ১০ সেকেন্ড পর পর লাইভ আপডেট লুপ ---
 async def global_updater(app):
     while True:
         await asyncio.sleep(10)
@@ -283,7 +283,11 @@ async def global_updater(app):
             try:
                 chat_id = int(chat_id_str)
                 img_buf = await asyncio.to_thread(generate_dashboard_image, chat_id)
-                media = InputMediaPhoto(media=img_buf)
+                media = InputMediaPhoto(
+                    media=img_buf,
+                    caption=get_caption_text(),
+                    parse_mode="HTML"
+                )
                 await app.bot.edit_message_media(
                     chat_id=chat_id,
                     message_id=msg_id,
@@ -321,6 +325,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=img_buf,
+        caption=get_caption_text(),
+        parse_mode="HTML",
         reply_markup=get_control_keyboard()
     )
     save_active_dashboard(chat_id, msg.message_id)
@@ -334,18 +340,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "add_coin":
         current_coins = get_user_watchlist(user_id)
         if len(current_coins) >= MAX_COINS_LIMIT:
-            reply_msg = await query.message.reply_text(f"⚠️ সর্বোচ্চ {MAX_COINS_LIMIT}টি কয়েন পূর্ণ হয়েছে!")
+            reply_msg = await query.message.reply_text(f"⚠️ সর্বোচ্চ {MAX_COINS_LIMIT}টি কয়েন পূর্ণ হয়েছে!")
             asyncio.create_task(delete_after_30s(context.bot, query.message.chat_id, reply_msg.message_id))
             return
 
         waiting_for_input[user_id] = True
-        reply_msg = await query.message.reply_text("নতুন কয়েনের নাম লিখে মেসেজ দিন (যেমন: PEPE, DOGE):")
+        reply_msg = await query.message.reply_text("নতুন কয়েনের নাম লিখে মেসেজ দিন (যেমন: PEPE, DOGE):")
         asyncio.create_task(delete_after_30s(context.bot, query.message.chat_id, reply_msg.message_id))
 
     elif data == "remove_coin":
         coins = get_user_watchlist(user_id)
         buttons = [[InlineKeyboardButton(f"❌ {c}", callback_data=f"del_{c}")] for c in coins]
-        reply_msg = await query.message.reply_text("যে কয়েনটি বাদ দিতে চান ট্যাপ করুন:", reply_markup=InlineKeyboardMarkup(buttons))
+        reply_msg = await query.message.reply_text("যে কয়েনটি বাদ দিতে চান ট্যাপ করুন:", reply_markup=InlineKeyboardMarkup(buttons))
         asyncio.create_task(delete_after_30s(context.bot, query.message.chat_id, reply_msg.message_id))
 
     elif data.startswith("del_"):
@@ -362,7 +368,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.edit_message_media(
                 chat_id=user_id,
                 message_id=active_msg_id,
-                media=InputMediaPhoto(media=img_buf),
+                media=InputMediaPhoto(
+                    media=img_buf,
+                    caption=get_caption_text(),
+                    parse_mode="HTML"
+                ),
                 reply_markup=get_control_keyboard()
             )
 
@@ -379,16 +389,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         success, status = add_coin_for_user(user_id, coin)
         if success:
-            reply_text = f"✅ {coin} যোগ হয়েছে!"
+            reply_text = f"✅ {coin} যোগ হয়েছে!"
         elif status == "LIMIT_REACHED":
-            reply_text = f"❌ সর্বোচ্চ {MAX_COINS_LIMIT}টি কয়েন যোগ করতে পারবেন।"
+            reply_text = f"❌ সর্বোচ্চ {MAX_COINS_LIMIT}টি কয়েন যোগ করতে পারবেন।"
         else:
             reply_text = f"ℹ️ {coin} ইতিমধ্যে যুক্ত আছে।"
 
         reply_msg = await update.message.reply_text(reply_text)
         asyncio.create_task(delete_after_30s(context.bot, chat_id, reply_msg.message_id))
     else:
-        reply_msg = await update.message.reply_text("ℹ️ কয়েন পরিবর্তন করতে ছবির নিচের বাটন ব্যবহার করুন।")
+        reply_msg = await update.message.reply_text("ℹ️ কয়েন পরিবর্তন করতে ছবির নিচের বাটন ব্যবহার করুন।")
         asyncio.create_task(delete_after_30s(context.bot, chat_id, reply_msg.message_id))
 
 async def post_init(application):
