@@ -37,33 +37,21 @@ COIN_NAMES = {
     "NEAR": "NEAR Protocol", "AVAX": "Avalanche", "LINK": "Chainlink"
 }
 
-# --- এইচডি ফন্ট লোডার ---
-def get_font(size, bold=True, is_bengali=False):
-    if is_bengali:
-        kp_path = os.path.join(BASE_DIR, "Kalpurush.ttf")
-        if os.path.exists(kp_path):
-            try: return ImageFont.truetype(kp_path, size)
-            except Exception: pass
-
-    rb_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf")
-    if os.path.exists(rb_path):
-        try: return ImageFont.truetype(rb_path, size)
-        except Exception: pass
-
-    # সিস্টেম ফলব্যাক
-    sys_paths = [
+# --- টার্মাক্স নিরাপদ ফন্ট লোডার ---
+def get_font(size, bold=True):
+    paths = [
+        os.path.join(BASE_DIR, "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"),
         "/system/fonts/Roboto-Bold.ttf" if bold else "/system/fonts/Roboto-Regular.ttf",
         "/system/fonts/DroidSans-Bold.ttf" if bold else "/system/fonts/DroidSans.ttf",
         "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
     ]
-    for p in sys_paths:
+    for p in paths:
         if os.path.exists(p):
             try: return ImageFont.truetype(p, size)
             except Exception: pass
-
     return ImageFont.load_default()
 
-# --- স্টেট ও মাল্টি-ইউজার ডেটা ---
+# --- স্টেট হ্যান্ডলার ---
 def load_active_dashboards():
     if not os.path.exists(STATE_FILE): return {}
     try:
@@ -127,14 +115,13 @@ def update_market_data():
     except Exception:
         pass
 
-# --- আল্ট্রা এইচডি ক্রিপ্টো সার্কুলার লোগো ---
-def get_coin_icon(symbol, size=116):
+# --- সার্কুলার লোগো ফেচার ---
+def get_coin_icon(symbol, size=80):
     icon_path = os.path.join(ICONS_DIR, f"{symbol.lower()}.png")
     if not os.path.exists(icon_path):
         urls = [
             f"https://assets.coincap.io/assets/icons/{symbol.lower()}@2x.png",
-            f"https://cryptoicons.org/api/icon/{symbol.lower()}/200",
-            f"https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons/128/color/{symbol.lower()}.png"
+            f"https://cryptoicons.org/api/icon/{symbol.lower()}/200"
         ]
         for u in urls:
             try:
@@ -160,53 +147,53 @@ def get_coin_icon(symbol, size=116):
             return None
     return None
 
-# --- রেফারেন্স ফটোর হুবহু এইচডি রেন্ডারার ---
+# --- নো-কাটিং ব্যালেন্সড ইমেজ রেন্ডারার ---
 def generate_dashboard_image(user_id):
     coins = get_user_watchlist(user_id)
 
-    # প্রিমিয়াম এইচডি মাপ
-    width = 1080
-    row_height = 175
-    header_pad = 35
-    height = header_pad + len(coins) * row_height + 25
+    # টেলিগ্রামে যেন মাথা বা পা না কাটে সেজন্য ভারসাম্যপূর্ণ অনুপাত
+    width = 750
+    row_height = 112
+    top_pad = 28
+    bottom_pad = 28
+    height = top_pad + len(coins) * row_height + bottom_pad
 
-    # রেফারেন্স ফটোর আসল ব্যাকগ্রাউন্ড: #1F2630
+    # স্টিল ডার্ক ব্যাকগ্রাউন্ড (#1F2630)
     bg_color = (31, 38, 48, 255)
     img = Image.new("RGBA", (width, height), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # ফন্ট সাইজ (বোল্ড ও পরিষ্কার)
-    f_symbol = get_font(46, bold=True)
-    f_pair = get_font(30, bold=False)
-    f_name = get_font(30, bold=False)
-    f_price = get_font(48, bold=True)
-    f_bdt = get_font(32, bold=False, is_bengali=True)
-    f_badge = get_font(36, bold=True)
+    f_symbol = get_font(30, bold=True)
+    f_pair = get_font(19, bold=False)
+    f_name = get_font(19, bold=False)
+    f_price = get_font(31, bold=True)
+    f_bdt = get_font(19, bold=False)
+    f_badge = get_font(23, bold=True)
 
     color_white = (255, 255, 255, 255)
-    color_grey = (132, 142, 156, 255)  # #848E9C
+    color_grey = (132, 142, 156, 255)
 
-    y = header_pad
+    y = top_pad
     for coin in coins:
         # ১. গোল লোগো
-        icon = get_coin_icon(coin, size=114)
+        icon = get_coin_icon(coin, size=78)
         if icon:
-            img.paste(icon, (50, y + 26), mask=icon)
+            img.paste(icon, (32, y + 17), mask=icon)
         else:
-            draw.ellipse((50, y + 26, 164, y + 140), fill=(43, 54, 69))
-            draw.text((70, y + 54), coin[:3], fill=color_white, font=f_symbol)
+            draw.ellipse((32, y + 17, 110, y + 95), fill=(43, 54, 69))
+            draw.text((45, y + 36), coin[:3], fill=color_white, font=f_symbol)
 
         # ২. কয়েন নাম ও /USDT
-        sym_x = 195
-        draw.text((sym_x, y + 30), coin, fill=color_white, font=f_symbol)
-        bbox = draw.textbbox((sym_x, y + 30), coin, font=f_symbol)
+        sym_x = 135
+        draw.text((sym_x, y + 20), coin, fill=color_white, font=f_symbol)
+        bbox = draw.textbbox((sym_x, y + 20), coin, font=f_symbol)
         cw = bbox[2] - bbox[0]
-        draw.text((sym_x + cw + 10, y + 44), "/USDT", fill=color_grey, font=f_pair)
+        draw.text((sym_x + cw + 7, y + 30), "/USDT", fill=color_grey, font=f_pair)
 
         full_name = COIN_NAMES.get(coin, coin)
-        draw.text((sym_x, y + 94), full_name, fill=color_grey, font=f_name)
+        draw.text((sym_x, y + 62), full_name, fill=color_grey, font=f_name)
 
-        # ৩. প্রাইস এবং টাকার রেট (আসল ৳ চিহ্নসহ)
+        # ৩. প্রাইস এবং টাকার রেট (চারকোনা বক্সবিহীন Tk প্রিফিক্স)
         pair = f"{coin}USDT"
         if pair in cached_market_data:
             price = float(cached_market_data[pair]["lastPrice"])
@@ -214,31 +201,31 @@ def generate_dashboard_image(user_id):
             bdt_price = price * USD_TO_BDT
 
             p_str = f"{price:,.4f}" if price < 1 else f"{price:,.2f}"
-            bdt_str = f"৳{bdt_price:,.2f}"
+            bdt_str = f"Tk {bdt_price:,.2f}"
 
-            price_right = 750
+            price_right = 530
             p_bbox = draw.textbbox((0, 0), p_str, font=f_price)
             pw = p_bbox[2] - p_bbox[0]
-            draw.text((price_right - pw, y + 30), p_str, fill=color_white, font=f_price)
+            draw.text((price_right - pw, y + 20), p_str, fill=color_white, font=f_price)
 
             b_bbox = draw.textbbox((0, 0), bdt_str, font=f_bdt)
             bw = b_bbox[2] - b_bbox[0]
-            draw.text((price_right - bw, y + 94), bdt_str, fill=color_grey, font=f_bdt)
+            draw.text((price_right - bw, y + 62), bdt_str, fill=color_grey, font=f_bdt)
 
             # ৪. পার্সেন্টেজ ব্যাজ (#F6465D ও #0ECB81)
             badge_color = (246, 70, 93) if change < 0 else (14, 203, 129)
             sign = "+" if change >= 0 else ""
             c_str = f"{sign}{change:.2f}%"
 
-            bx1, by1, bx2, by2 = 795, y + 34, 1030, y + 128
-            draw.rounded_rectangle([bx1, by1, bx2, by2], radius=14, fill=badge_color)
+            bx1, by1, bx2, by2 = 560, y + 24, 718, y + 88
+            draw.rounded_rectangle([bx1, by1, bx2, by2], radius=10, fill=badge_color)
 
             cb = draw.textbbox((0, 0), c_str, font=f_badge)
             cw_b = cb[2] - cb[0]
             ch_b = cb[3] - cb[1]
-            draw.text((bx1 + (235 - cw_b) // 2, by1 + (94 - ch_b) // 2 - 4), c_str, fill=color_white, font=f_badge)
+            draw.text((bx1 + (158 - cw_b) // 2, by1 + (64 - ch_b) // 2 - 2), c_str, fill=color_white, font=f_badge)
         else:
-            draw.text((600, y + 55), "N/A", fill=color_grey, font=f_name)
+            draw.text((430, y + 36), "N/A", fill=color_grey, font=f_name)
 
         y += row_height
 
@@ -247,14 +234,14 @@ def generate_dashboard_image(user_id):
     buf.seek(0)
     return buf
 
-# রেফারেন্স অনুযায়ী মনো-ফন্ট ক্যাপশন তৈরি
+# নির্দেশ মতো আপডেট করা ক্যাপশন
 def get_caption_text():
     try:
         tz = pytz.timezone("Asia/Dhaka")
         current_time = datetime.now(tz).strftime("%I:%M:%S %p")
     except Exception:
         current_time = datetime.now().strftime("%I:%M:%S %p")
-    return f"⏱ অটো রিফ্রেশ: 10s | 🕒 <code>{current_time}</code>"
+    return f"⏱ Refresh: 10s | 🕒 <code>{current_time}</code>"
 
 def get_control_keyboard():
     return InlineKeyboardMarkup([
@@ -414,9 +401,8 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.ALL, message_handler))
 
-    print("এইচডি ড্যাশবোর্ড বট চলছে...")
+    print("বট সক্রিয়ভাবে চলছে...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-    
