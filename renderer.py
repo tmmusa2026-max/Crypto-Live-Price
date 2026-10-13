@@ -32,6 +32,7 @@ PRICE_RIGHT = 717         # দাম/টাকার ডান প্রান�
 BADGE_X = 775
 
 _font_cache = {}
+_logo_cache = {}
 
 
 def _font(name, size):
@@ -137,7 +138,7 @@ def render_dashboard(rows, get_icon):
     """
     n = max(len(rows), 1)
     height = FIRST_BADGE_TOP + ROW_PITCH * (n - 1) + BADGE_H + 52
-    img = Image.new("RGBA", (W * SS, height * SS), BG + (255,))
+    img = Image.new("RGB", (W * SS, height * SS), BG)
     draw = ImageDraw.Draw(img)
 
     # --- হেডার: Name / Last Price / 24h chg% ---
@@ -153,7 +154,11 @@ def render_dashboard(rows, get_icon):
 
         # লোগো
         icon = get_icon(r["symbol"])
-        logo = _circular(icon, LOGO_D) if icon is not None else _fallback_logo(r["symbol"], LOGO_D)
+        ck = (r["symbol"], icon is None)
+        logo = _logo_cache.get(ck)
+        if logo is None:
+            logo = _circular(icon, LOGO_D) if icon is not None else _fallback_logo(r["symbol"], LOGO_D)
+            _logo_cache[ck] = logo
         img.paste(logo, (int(56 * SS), int((cy - LOGO_D / 2) * SS)), logo)
 
         # সিম্বল + /USDT
@@ -181,8 +186,8 @@ def render_dashboard(rows, get_icon):
         else:
             _draw_text(draw, PRICE_RIGHT, B + 60, "N/A", f_regular(40), GREY, "rs")
 
-    out = img.resize((W, height), Image.Resampling.LANCZOS).convert("RGB")
+    out = img.resize((W, height), Image.Resampling.BOX)
     buf = io.BytesIO()
-    out.save(buf, format="PNG", optimize=True)
+    out.save(buf, format="PNG", compress_level=3)
     buf.seek(0)
     return buf
