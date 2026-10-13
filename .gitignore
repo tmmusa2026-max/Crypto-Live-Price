@@ -1,7 +1,6 @@
 __pycache__/
 *.tmp
-temp_render.html
-dashboard.png
 coin_icons/
 user_watchlists.json
 active_dashboards.json
+.env
